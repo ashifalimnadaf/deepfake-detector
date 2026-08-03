@@ -1,0 +1,36 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments & Dependencies
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# Datasets and Large Media
+dataset/
+*.mp4
+*.avi
+*.mov
+
+# Model Checkpoints & Weights
+saved_model/
+*.h5
+*.pt
+*.pth
+*.onnx
+
+# IDE & OS specific files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Scratch & Temporary files
+scratch/
+.system_generated/
+*.log
