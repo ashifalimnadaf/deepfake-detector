@@ -3,15 +3,20 @@ Streamlit Web Application for Deepfake Detection - DeepShield AI v2.0
 """
 
 import os
-import cv2
 import json
 import numpy as np
 from PIL import Image
 import streamlit as st
 import tensorflow as tf
 
+try:
+    import cv2
+except Exception:
+    cv2 = None
+
 # Import modular preprocessing and face detection
 from preprocessing import preprocess_image, extract_face
+
 
 # Page Configuration
 st.set_page_config(
@@ -164,9 +169,15 @@ html, body, [class*="css"] {
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
-# Load OpenCV Cascade Classifier for visualization
-FACE_CASCADE_PATH = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-face_cascade = cv2.CascadeClassifier(FACE_CASCADE_PATH)
+# Load OpenCV Cascade Classifier for visualization safely
+if cv2 is not None:
+    try:
+        FACE_CASCADE_PATH = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+        face_cascade = cv2.CascadeClassifier(FACE_CASCADE_PATH)
+    except Exception:
+        face_cascade = None
+else:
+    face_cascade = None
 
 @st.cache_resource
 def load_detection_model(model_path):
@@ -199,37 +210,47 @@ def load_detection_model(model_path):
 def detect_faces_for_display(image):
     """Detects faces and overlays bounding boxes for UI feedback."""
     img_np = np.array(image.convert("RGB"))
-    gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
     
-    faces = face_cascade.detectMultiScale(
-        gray,
-        scaleFactor=1.1,
-        minNeighbors=5,
-        minSize=(30, 30)
-    )
-    
-    face_detected = len(faces) > 0
-    img_display = img_np.copy()
-    cropped_face = None
-    
-    for (x, y, w, h) in faces:
-        # Draw glowing turquoise rectangle
-        cv2.rectangle(img_display, (x, y), (x+w, y+h), (0, 243, 255), 3)
-        cv2.putText(img_display, "FACIAL REGION DETECTED", (x, max(y-10, 15)), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 243, 255), 2)
-        if cropped_face is None:
-            # Crop face for zoom box
-            pad_w, pad_h = int(w * 0.15), int(h * 0.15)
-            x1, y1 = max(0, x - pad_w), max(0, y - pad_h)
-            x2, y2 = min(img_np.shape[1], x + w + pad_w), min(img_np.shape[0], y + h + pad_h)
-            cropped_face = img_np[y1:y2, x1:x2]
+    if cv2 is not None and face_cascade is not None and not face_cascade.empty():
+        try:
+            gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+            faces = face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=5,
+                minSize=(30, 30)
+            )
             
-    if cropped_face is None:
-        cropped_face = cv2.resize(img_np, (300, 300))
-    else:
-        cropped_face = cv2.resize(cropped_face, (300, 300))
-        
-    return Image.fromarray(img_display), Image.fromarray(cropped_face), face_detected
+            face_detected = len(faces) > 0
+            img_display = img_np.copy()
+            cropped_face = None
+            
+            for (x, y, w, h) in faces:
+                # Draw glowing turquoise rectangle
+                cv2.rectangle(img_display, (x, y), (x+w, y+h), (0, 243, 255), 3)
+                cv2.putText(img_display, "FACIAL REGION DETECTED", (x, max(y-10, 15)), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 243, 255), 2)
+                if cropped_face is None:
+                    # Crop face for zoom box
+                    pad_w, pad_h = int(w * 0.15), int(h * 0.15)
+                    x1, y1 = max(0, x - pad_w), max(0, y - pad_h)
+                    x2, y2 = min(img_np.shape[1], x + w + pad_w), min(img_np.shape[0], y + h + pad_h)
+                    cropped_face = img_np[y1:y2, x1:x2]
+                    
+            if cropped_face is None:
+                cropped_face = cv2.resize(img_np, (300, 300))
+            else:
+                cropped_face = cv2.resize(cropped_face, (300, 300))
+                
+            return Image.fromarray(img_display), Image.fromarray(cropped_face), face_detected
+        except Exception:
+            pass
+            
+    # PIL Fallback if cv2 is not available or encounters an error
+    img_pil = image.convert("RGB")
+    cropped_pil = img_pil.resize((300, 300))
+    return img_pil, cropped_pil, False
+
 
 # Header Section
 st.markdown("""

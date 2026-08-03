@@ -10,30 +10,38 @@ This module contains functions to:
 
 import os
 import random
-import cv2
 import numpy as np
+from PIL import Image
+
+try:
+    import cv2
+except Exception:
+    cv2 = None
 
 # Initialize MediaPipe face detector safely
 try:
     import mediapipe as mp
     if hasattr(mp, "solutions") and hasattr(mp.solutions, "face_detection"):
         mp_face_detection = mp.solutions.face_detection
-        # Use model_selection=1 for full-range images (typically faces further than 2m), 0 for close-up (within 2m)
         mp_detector = mp_face_detection.FaceDetection(min_detection_confidence=0.5, model_selection=0)
         print("MediaPipe Face Detection successfully initialized.")
     else:
         mp_detector = None
-        print("Notice: MediaPipe solutions module not available in installed version. Face detection will fall back to OpenCV Haar Cascade.")
+        print("Notice: MediaPipe solutions module not available in installed version.")
 except Exception as e:
     mp_detector = None
-    print(f"Notice: MediaPipe face detection could not be loaded ({e}). Face detection will fall back to OpenCV Haar Cascade.")
+    print(f"Notice: MediaPipe face detection could not be loaded ({e}).")
 
-# Initialize Haar Cascade face detector using OpenCV's built-in model
-FACE_CASCADE_PATH = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-face_cascade = cv2.CascadeClassifier(FACE_CASCADE_PATH)
+# Initialize Haar Cascade face detector safely
+if cv2 is not None:
+    try:
+        FACE_CASCADE_PATH = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+        face_cascade = cv2.CascadeClassifier(FACE_CASCADE_PATH)
+    except Exception:
+        face_cascade = None
+else:
+    face_cascade = None
 
-if face_cascade.empty():
-    print("Warning: OpenCV Haar Cascade XML could not be loaded. Face detection fallback might fail, falling back to full image.")
 
 def extract_face(image, padding_ratio=0.15):
     """
@@ -195,34 +203,42 @@ def preprocess_image(file_path, target_size=(300, 300), is_training=False):
     Returns:
         numpy.ndarray: Preprocessed float32 image normalized to [0, 1] with shape (300, 300, 3).
     """
-    # 1. Load image in BGR
-    img = cv2.imread(file_path)
-    if img is None:
-        # If image cannot be read, return a blank image of target size to avoid breaking training
-        print(f"Warning: Failed to load image at {file_path}. Using a dummy blank image.")
-        return np.zeros((target_size[0], target_size[1], 3), dtype=np.float32)
-        
-    # Convert BGR to RGB
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    # 1. Load image
+    if cv2 is not None:
+        img = cv2.imread(file_path)
+        if img is None:
+            print(f"Warning: Failed to load image at {file_path}. Using a dummy blank image.")
+            return np.zeros((target_size[0], target_size[1], 3), dtype=np.float32)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    else:
+        try:
+            pil_img = Image.open(file_path).convert("RGB")
+            img = np.array(pil_img)
+        except Exception:
+            return np.zeros((target_size[0], target_size[1], 3), dtype=np.float32)
     
-    # 2. Extract face (optional but highly preferred for deepfake detection)
+    # 2. Extract face
     try:
         img = extract_face(img)
     except Exception as e:
-        # Fallback if face extraction throws an unexpected error
         print(f"Warning: Face extraction failed for {file_path} with error {e}. Using full image.")
         
     # 3. Apply training data augmentation
-    if is_training:
+    if is_training and cv2 is not None:
         img = augment_image(img)
         
     # 4. Resize to target dimensions
-    img = cv2.resize(img, target_size, interpolation=cv2.INTER_AREA)
+    if cv2 is not None:
+        img = cv2.resize(img, target_size, interpolation=cv2.INTER_AREA)
+    else:
+        pil_res = Image.fromarray(img).resize(target_size)
+        img = np.array(pil_res)
     
     # 5. Normalize pixel values to [0, 1] float32
     img_normalized = img.astype(np.float32) / 255.0
     
     return img_normalized
+
 
 # Main verification block
 if __name__ == "__main__":
