@@ -18,11 +18,15 @@ dataset/
 *.mov
 
 # Model Checkpoints & Weights
-saved_model/
-*.h5
+!saved_model/
+!saved_model/deepfake_detector_best.keras
+!saved_model/deepfake_detector_best.h5
+!saved_model/evaluation_results.json
+!saved_model/*.png
 *.pt
 *.pth
 *.onnx
+
 
 # IDE & OS specific files
 .vscode/
